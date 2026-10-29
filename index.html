@@ -48,6 +48,7 @@ main{flex:1;min-width:0;padding:26px 30px 40px;max-width:1600px;margin:0 auto;wi
   </section>
   <section class="section" id="dividends">
     <div class="panel"><div class="panel-head"><div><h2>Dividendos e rendimentos</h2><p class="sub">Registre proventos recebidos de ações e FIIs.</p></div><button class="btn primary" id="addDividendBtn">＋ Registrar provento</button></div><div class="cards" id="dividendMetrics"></div><div class="table-wrap" id="dividendsTable"></div></div>
+    <div class="panel" style="margin-top:16px"><div class="panel-head"><div><h2>Consultar proventos anunciados</h2><p class="sub">Informações da brapi para conferência. Não são lançadas automaticamente como dinheiro recebido.</p></div><button class="btn" id="fetchDividendsBtn">Consultar API</button></div><p class="sync-bar" id="dividendQueryStatus">Consulta opcional: proventos de ações exigem plano Startup ou Pro; FIIs, plano Pro.</p><div class="table-wrap" id="marketDividendsTable"></div></div>
   </section>
   <section class="section" id="history">
     <div class="panel"><div class="panel-head"><div><h2>Histórico de fechamentos</h2><p class="sub">Salve o valor da carteira para acompanhar a evolução ao longo do tempo.</p></div><button class="btn primary" id="historySnapshotBtn">＋ Registrar fechamento</button></div><div class="table-wrap" id="historyTable"></div></div>
@@ -76,6 +77,20 @@ let state={assets:[],operations:[],dividends:[],history:[]},modalMode=null;
 let auth=null,db=null,currentUser=null,unsubscribe=null,documentRef=null,saveQueue=Promise.resolve(),pendingSaves=0,initialized=false;
 const QUOTE_TOKEN_KEY='minhaCarteira_brapi_token_v1';
 let quoteBusy=false,quoteGeneration=0;
+const localToday=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')};
+// Um único fechamento automático por dia, atualizado se houver nova cotação no mesmo dia.
+function recordDailySnapshot(){
+ if(!initialized||!currentUser||!state.assets.some(a=>Number(a.quantity)>0))return;
+ const date=localToday(),t=totals();
+ const existing=state.history.find(h=>h.date===date&&h.automatic===true);
+ if(existing){
+  if(existing.current===t.current&&existing.invested===t.invested&&existing.profit===t.profit)return;
+  Object.assign(existing,{current:t.current,invested:t.invested,profit:t.profit});
+ }else if(!state.history.some(h=>h.date===date)){
+  state.history.push({id:Date.now(),date,current:t.current,invested:t.invested,profit:t.profit,automatic:true});
+ }else return; // Respeitar um fechamento manual registrado na mesma data.
+ save();
+}
 function quoteStatus(msg){document.getElementById('quoteStatus').textContent=msg}
 async function refreshQuotes(automatic=false){
  if(quoteBusy||!initialized||!currentUser)return;
@@ -102,7 +117,9 @@ async function refreshQuotes(automatic=false){
   if(generation!==quoteGeneration||!currentUser)return;
   let changes=0;
   for(const asset of state.assets){const price=prices.get(String(asset.ticker||'').toUpperCase());if(price!==undefined&&Number(asset.quote)!==price){asset.quote=price;changes++}}
-  if(changes)save();else renderAll();
+  if(changes){save();await saveQueue.catch(()=>{})}else renderAll();
+  if(generation!==quoteGeneration||!currentUser)return;
+  recordDailySnapshot();
   const summary=prices.size+'/'+tickers.length+' cotações consultadas'+(changes?' — '+changes+' atualizadas':' — sem alterações');
   quoteStatus(summary+(errors.length?' | Falhas: '+errors.join(', '):''));
  }finally{quoteBusy=false;document.getElementById('refreshQuotesBtn').disabled=false}
@@ -112,6 +129,37 @@ document.getElementById('cancelQuoteModal').onclick=()=>document.getElementById(
 document.getElementById('removeQuoteToken').onclick=()=>{localStorage.removeItem(QUOTE_TOKEN_KEY);document.getElementById('quoteModal').classList.remove('show');quoteStatus('Token removido; cotações manuais')};
 document.getElementById('quoteForm').onsubmit=e=>{e.preventDefault();const token=document.getElementById('quoteToken').value.trim();if(!token)return;localStorage.setItem(QUOTE_TOKEN_KEY,token);document.getElementById('quoteModal').classList.remove('show');refreshQuotes()};
 document.getElementById('refreshQuotesBtn').onclick=()=>refreshQuotes();
+document.getElementById('fetchDividendsBtn').onclick=async()=>{
+ if(!initialized||!currentUser)return;
+ const token=localStorage.getItem(QUOTE_TOKEN_KEY);
+ if(!token){alert('Configure primeiro seu token da brapi em “Configurar cotações”.');return}
+ const button=document.getElementById('fetchDividendsBtn'),label=document.getElementById('dividendQueryStatus');
+ const assets=state.assets.filter(a=>Number(a.quantity)>0&&/^[A-Z0-9]{4,12}$/.test(String(a.ticker)));
+ const events=[],errors=[];button.disabled=true;label.textContent='Consultando proventos…';
+ const start=new Date();start.setFullYear(start.getFullYear()-1);
+ const startDate=[start.getFullYear(),String(start.getMonth()+1).padStart(2,'0'),String(start.getDate()).padStart(2,'0')].join('-');
+ try{
+  for(const asset of assets){
+   const ticker=asset.ticker,isFii=asset.type==='FII';
+   const endpoint=isFii?'fii/dividends':'stocks/dividends';
+   const params=new URLSearchParams({symbols:ticker,startDate});
+   try{
+    const response=await fetch('https://brapi.dev/api/v2/'+endpoint+'?'+params,{headers:{Authorization:'Bearer '+token},cache:'no-store'});
+    if(!response.ok)throw new Error('HTTP '+response.status);
+    const data=await response.json();
+    const items=isFii?(data.dividends||[]):(data.results||[]).flatMap(x=>x.data?.cashDividends||[]);
+    for(const item of items){
+     const date=String(item.paymentDate||'').slice(0,10),rate=Number(item.rate);
+     if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(rate)||rate<=0)continue;
+     events.push({ticker,date,rate,kind:String(item.label||'Provento'),note:String(item.remarks||'')});
+    }
+   }catch(err){errors.push(ticker+' ('+err.message+')')}
+  }
+  events.sort((a,b)=>b.date.localeCompare(a.date));
+  document.getElementById('marketDividendsTable').innerHTML=events.length?`<table><thead><tr><th>Pagamento informado</th><th>Ativo</th><th>Tipo</th><th class="num">Valor por ação/cota</th><th>Observação</th></tr></thead><tbody>${events.slice(0,100).map(x=>`<tr><td>${esc(x.date)}</td><td class="ticker">${esc(x.ticker)}</td><td>${esc(x.kind)}</td><td class="num">${brl(x.rate)}</td><td>${esc(x.note)}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">Nenhum evento retornado pelas consultas disponíveis.</div>';
+  label.textContent=events.length+' eventos informativos encontrados. Confira elegibilidade, quantidades e extrato antes de registrar recebimentos.'+(errors.length?' Consultas sem acesso ou com falha: '+errors.join(', '):'');
+ }finally{button.disabled=false}
+};
 function loadState(){try{const s=JSON.parse(localStorage.getItem(STORAGE_KEY));if(s&&s.assets)return s}catch(e){}return structuredClone(initial)}
 function validData(s){return s&&Array.isArray(s.assets)&&Array.isArray(s.operations)&&Array.isArray(s.dividends)&&Array.isArray(s.history)}
 function status(msg){document.getElementById('syncStatus').textContent=msg;document.getElementById('lastSaved').textContent=msg}
@@ -140,7 +188,7 @@ async function openCloud(user){
    if(!initialized||pendingSaves||snap.metadata.hasPendingWrites||!snap.exists)return;
    const remote=snap.data().data;if(validData(remote)){state=remote;renderAll();status('Sincronizado com a nuvem')}
   },err=>status('Erro de sincronização: '+err.message));
-  if(localStorage.getItem(QUOTE_TOKEN_KEY))refreshQuotes(true);else quoteStatus('Configure o token da brapi para cotações automáticas');
+  if(localStorage.getItem(QUOTE_TOKEN_KEY))refreshQuotes(true);else {quoteStatus('Configure o token da brapi para cotações automáticas');recordDailySnapshot()}
  }catch(err){currentUser=null;initialized=false;showLogin('Não foi possível carregar os dados: '+err.message);await auth.signOut()}
 }
 function setupFirebase(){
