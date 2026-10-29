@@ -12,10 +12,12 @@ main{flex:1;min-width:0;padding:26px 30px 40px;max-width:1600px;margin:0 auto;wi
 @media(max-width:1050px){.sidebar{width:200px}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.grid2{grid-template-columns:1fr}main{padding:22px}}
 @media(max-width:700px){.app{display:block}.sidebar{width:100%;padding:12px;gap:12px}.brand{padding:0 4px}.nav-label,.side-note{display:none}.nav{display:flex;overflow:auto}.nav button{white-space:nowrap;padding:9px 10px;font-size:12px}.nav .ico{display:none}main{padding:17px 12px}.topbar{align-items:flex-start;flex-direction:column}.topbar h1{font-size:22px}.cards{gap:9px}.metric{padding:13px}.metric-value{font-size:19px}.form-grid{grid-template-columns:1fr 1fr}.actions{width:100%}.actions .btn{flex:1}.panel{padding:13px}}
 @media(max-width:420px){.form-grid{grid-template-columns:1fr}.cards{grid-template-columns:1fr 1fr}.metric-value{font-size:17px}}
+.auth-screen{position:fixed;inset:0;z-index:20;display:grid;place-items:center;background:#edf2fa;padding:18px}.auth-card{background:white;border:1px solid #e4e9f1;border-radius:18px;padding:28px;width:min(440px,100%);box-shadow:0 20px 60px #1a2b4b18}.auth-card h1{margin:0 0 8px}.auth-card p{color:#687386}.auth-card label{display:block;font-weight:600;margin-top:12px}.auth-card input{width:100%;margin-top:5px}.auth-card .btn{width:100%;margin-top:18px}.auth-error{color:#c53d4e;min-height:20px}.sync-bar{font-size:12px;color:#687386}
 </style>
 </head>
 <body>
-<div class="app">
+<div class="auth-screen" id="authScreen"><form class="auth-card" id="loginForm"><h1>Minha Carteira</h1><p>Entre com sua conta cadastrada no Firebase.</p><label>E-mail<input class="input" type="email" id="loginEmail" autocomplete="username" required></label><label>Senha<input class="input" type="password" id="loginPassword" autocomplete="current-password" required></label><button class="btn primary" type="submit">Entrar</button><p class="auth-error" id="authError" role="alert"></p><p class="sync-bar" id="authHint">Conectando ao Firebase…</p></form></div>
+<div class="app hidden" id="appRoot">
 <aside class="sidebar">
   <div class="brand"><div class="logo">₿</div><div><strong>Minha Carteira</strong><small>Investimentos</small></div></div>
   <div><div class="nav-label">Menu principal</div><nav class="nav">
@@ -28,9 +30,9 @@ main{flex:1;min-width:0;padding:26px 30px 40px;max-width:1600px;margin:0 auto;wi
   <div class="side-note">Controle sua carteira de ações e fundos imobiliários em um só lugar.<br><br><span id="lastSaved">Dados salvos neste navegador</span></div>
 </aside>
 <main>
-  <header class="topbar"><div><div class="eyebrow">PAINEL DE INVESTIMENTOS</div><h1 id="pageTitle">Visão geral</h1></div><div class="actions"><button class="btn" id="exportBtn">Exportar dados</button><button class="btn" id="importBtn">Importar dados</button><button class="btn primary" id="addOperationTop">＋ Nova operação</button><input type="file" id="importFile" accept=".json" class="hidden"></div></header>
+  <header class="topbar"><div><div class="eyebrow">PAINEL DE INVESTIMENTOS</div><h1 id="pageTitle">Visão geral</h1><span class="sync-bar" id="syncStatus" role="status">Aguardando conexão</span></div><div class="actions"><button class="btn" id="exportBtn">Exportar dados</button><button class="btn" id="importBtn">Importar dados</button><button class="btn primary" id="addOperationTop">＋ Nova operação</button><button class="btn" id="logoutBtn">Sair</button><input type="file" id="importFile" accept=".json" class="hidden"></div></header>
   <section class="section active" id="dashboard">
-    <div class="notice"><strong>Primeira versão:</strong> os preços são editados manualmente. As cotações automáticas dependem da integração futura com uma fonte de dados. Seus registros ficam salvos neste navegador; faça exportações de backup regularmente.</div>
+    <div class="notice"><strong>Acompanhamento:</strong> os preços ainda são editados manualmente. Exporte backups regularmente e confira o status de sincronização antes de sair.</div>
     <div class="cards" id="metricCards"></div>
     <div class="grid2">
       <div class="panel"><div class="panel-head"><div><h2>Evolução do patrimônio</h2><p class="sub">Registros salvos no histórico</p></div><button class="btn small" id="snapshotBtn">＋ Registrar fechamento</button></div><canvas class="chart" id="historyChart"></canvas><div class="legend"><span><i class="dot" style="background:#225ee8"></i>Patrimônio</span></div></div>
@@ -54,24 +56,62 @@ main{flex:1;min-width:0;padding:26px 30px 40px;max-width:1600px;margin:0 auto;wi
 </main>
 </div>
 <div class="modal-backdrop" id="modalBackdrop"><div class="modal"><h2 id="modalTitle">Novo registro</h2><p class="sub" id="modalSub"></p><form id="modalForm"><div id="modalFields" class="form-grid"></div><div class="modal-actions"><button type="button" class="btn" id="cancelModal">Cancelar</button><button type="submit" class="btn primary">Salvar</button></div></form></div></div>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script>
-const STORAGE_KEY='minhaCarteiraInvestimentos_v1';
-const initial={
- assets:[
- {ticker:'ASAI3',type:'Ação',quantity:1500,avg:8.03,quote:7.88},
- {ticker:'BBAS3',type:'Ação',quantity:200,avg:18.12,quote:16.79},
- {ticker:'VALE3',type:'Ação',quantity:30,avg:63.26,quote:61.38},
- {ticker:'ABCB4',type:'Ação',quantity:17,avg:24.24,quote:23.14},
- {ticker:'CPTS11',type:'FII',quantity:100,avg:7.17,quote:7.00},
- {ticker:'KLBN11',type:'Ação',quantity:8,avg:18.71,quote:17.49},
- {ticker:'KLBN4',type:'Ação',quantity:3,avg:3.70,quote:3.49},
- {ticker:'KNCR11',type:'FII',quantity:10,avg:105.17,quote:104.60}
- ],
- operations:[], dividends:[], history:[]
+// Firebase Console > Configurações do projeto > Seus apps > Configuração SDK.
+const firebaseConfig={
+ apiKey:'COLE_API_KEY',
+ authDomain:'COLE_AUTH_DOMAIN',
+ projectId:'COLE_PROJECT_ID',
+ appId:'COLE_APP_ID'
 };
-let state=loadState(), modalMode=null;
+const STORAGE_KEY='minhaCarteiraInvestimentos_v1';
+const initial={assets:[],operations:[],dividends:[],history:[]};
+let state={assets:[],operations:[],dividends:[],history:[]},modalMode=null;
+let auth=null,db=null,currentUser=null,unsubscribe=null,documentRef=null,saveQueue=Promise.resolve(),pendingSaves=0,initialized=false;
 function loadState(){try{const s=JSON.parse(localStorage.getItem(STORAGE_KEY));if(s&&s.assets)return s}catch(e){}return structuredClone(initial)}
-function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));document.getElementById('lastSaved').textContent='Salvo neste navegador às '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});renderAll()}
+function validData(s){return s&&Array.isArray(s.assets)&&Array.isArray(s.operations)&&Array.isArray(s.dividends)&&Array.isArray(s.history)}
+function status(msg){document.getElementById('syncStatus').textContent=msg;document.getElementById('lastSaved').textContent=msg}
+function save(){
+ if(!currentUser||!initialized||!documentRef){alert('Aguarde a conexão com sua carteira.');return}
+ const payload=JSON.parse(JSON.stringify(state));pendingSaves++;status('Salvando na nuvem…');renderAll();
+ saveQueue=saveQueue.catch(()=>{}).then(()=>documentRef.set({data:payload,updatedAt:firebase.firestore.FieldValue.serverTimestamp()})).then(()=>{pendingSaves--;if(!pendingSaves)status('Sincronizado às '+new Date().toLocaleTimeString('pt-BR'))}).catch(err=>{pendingSaves--;status('Falha ao salvar — exporte um backup!');alert('Não foi possível salvar na nuvem: '+err.message+'\nExporte seus dados antes de fechar a página.')});
+}
+function showLogin(msg=''){
+ document.getElementById('appRoot').classList.add('hidden');document.getElementById('authScreen').classList.remove('hidden');document.getElementById('authError').textContent=msg;
+}
+function showApp(){document.getElementById('authScreen').classList.add('hidden');document.getElementById('appRoot').classList.remove('hidden');renderAll()}
+async function openCloud(user){
+ currentUser=user;initialized=false;documentRef=db.collection('users').doc(user.uid).collection('portfolio').doc('main');
+ status('Carregando carteira…');
+ try{
+  const snap=await documentRef.get({source:'server'});
+  if(snap.exists){const saved=snap.data().data;if(!validData(saved))throw new Error('Dados da nuvem incompatíveis.');state=saved;initialized=true;showApp();status('Dados carregados da nuvem')}
+  else{
+   const local=localStorage.getItem(STORAGE_KEY);const localData=local?JSON.parse(local):null;
+   const importLocal=validData(localData)&&confirm('Encontramos uma carteira salva neste navegador. Deseja enviá-la para sua conta na nuvem?\n\nAntes, exporte um backup na versão antiga do site.\n\nCancelar começa com uma carteira vazia.');
+   state=importLocal?localData:{assets:[],operations:[],dividends:[],history:[]};initialized=true;showApp();
+   if(importLocal)save();else status('Carteira vazia — pronta para cadastrar ou importar dados');
+  }
+  unsubscribe=documentRef.onSnapshot(snap=>{
+   if(!initialized||pendingSaves||snap.metadata.hasPendingWrites||!snap.exists)return;
+   const remote=snap.data().data;if(validData(remote)){state=remote;renderAll();status('Sincronizado com a nuvem')}
+  },err=>status('Erro de sincronização: '+err.message));
+ }catch(err){currentUser=null;initialized=false;showLogin('Não foi possível carregar os dados: '+err.message);await auth.signOut()}
+}
+function setupFirebase(){
+ if(Object.values(firebaseConfig).some(v=>!v||v.startsWith('COLE_'))){showLogin('Falta preencher a configuração do Firebase no código.');document.getElementById('authHint').textContent='Consulte as instruções fornecidas com o arquivo.';return}
+ if(typeof firebase==='undefined'){showLogin('Não foi possível carregar as bibliotecas do Firebase. Verifique a conexão.');return}
+ try{firebase.initializeApp(firebaseConfig);auth=firebase.auth();db=firebase.firestore();auth.onAuthStateChanged(async user=>{
+  if(unsubscribe){unsubscribe();unsubscribe=null}initialized=false;currentUser=null;
+  if(!user){showLogin();return}await openCloud(user)
+ },err=>showLogin(err.message));document.getElementById('authHint').textContent='Use o usuário cadastrado em Authentication.'}
+ catch(err){showLogin('Erro na configuração Firebase: '+err.message)}
+}
+document.getElementById('loginForm').addEventListener('submit',async e=>{e.preventDefault();if(!auth)return;const button=e.target.querySelector('button');button.disabled=true;document.getElementById('authError').textContent='';try{await auth.signInWithEmailAndPassword(document.getElementById('loginEmail').value,document.getElementById('loginPassword').value)}catch(err){document.getElementById('authError').textContent='Não foi possível entrar. Confira e-mail, senha e configuração.'}finally{button.disabled=false}});
+document.getElementById('logoutBtn').onclick=async()=>{if(pendingSaves&&!confirm('Ainda há alterações sendo salvas. Deseja aguardar? Clique Cancelar para aguardar.'))return;await saveQueue.catch(()=>{});await auth.signOut()};
 const brl=n=>Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const pct=n=>(Number(n)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%';
 const num=n=>Number(n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -118,8 +158,8 @@ const rd=e.target.closest('[data-removediv]');if(rd&&confirm('Excluir este prove
 const rh=e.target.closest('[data-removehist]');if(rh&&confirm('Excluir este fechamento?')){state.history=state.history.filter(d=>String(d.id)!==rh.dataset.removehist);save()}
 });
 document.getElementById('exportBtn').onclick=()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='backup-minha-carteira-'+today()+'.json';a.click();URL.revokeObjectURL(url)};
-document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();document.getElementById('importFile').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{const data=JSON.parse(await file.text());if(!data.assets||!data.operations||!data.dividends||!data.history)throw new Error();if(confirm('Importar este arquivo substituirá os dados atuais neste navegador. Continuar?')){state=data;save();alert('Dados importados com sucesso.')}}catch(err){alert('Arquivo inválido ou incompatível. Selecione um backup JSON exportado pelo sistema.')}e.target.value=''};
-renderAll();
+document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();document.getElementById('importFile').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{const data=JSON.parse(await file.text());if(!validData(data))throw new Error();if(confirm('Importar este arquivo substituirá os dados atuais da sua carteira NA NUVEM, inclusive nos outros dispositivos. Exporte um backup antes. Continuar?')){state=data;save();alert('Importação iniciada. Aguarde a confirmação de sincronização.')}}catch(err){alert('Arquivo inválido ou incompatível. Selecione um backup JSON exportado pelo sistema.')}e.target.value=''};
+setupFirebase();
 </script>
 </body>
 </html>
