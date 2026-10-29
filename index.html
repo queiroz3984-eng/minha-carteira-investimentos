@@ -30,9 +30,9 @@ main{flex:1;min-width:0;padding:26px 30px 40px;max-width:1600px;margin:0 auto;wi
   <div class="side-note">Controle sua carteira de ações e fundos imobiliários em um só lugar.<br><br><span id="lastSaved">Dados salvos neste navegador</span></div>
 </aside>
 <main>
-  <header class="topbar"><div><div class="eyebrow">PAINEL DE INVESTIMENTOS</div><h1 id="pageTitle">Visão geral</h1><span class="sync-bar" id="syncStatus" role="status">Aguardando conexão</span></div><div class="actions"><button class="btn" id="exportBtn">Exportar dados</button><button class="btn" id="importBtn">Importar dados</button><button class="btn primary" id="addOperationTop">＋ Nova operação</button><button class="btn" id="logoutBtn">Sair</button><input type="file" id="importFile" accept=".json" class="hidden"></div></header>
+  <header class="topbar"><div><div class="eyebrow">PAINEL DE INVESTIMENTOS</div><h1 id="pageTitle">Visão geral</h1><span class="sync-bar" id="syncStatus" role="status">Aguardando conexão</span><span class="sync-bar" id="quoteStatus" role="status">Cotações manuais</span></div><div class="actions"><button class="btn" id="exportBtn">Exportar dados</button><button class="btn" id="importBtn">Importar dados</button><button class="btn" id="quoteSettingsBtn">Configurar cotações</button><button class="btn" id="refreshQuotesBtn">Atualizar cotações</button><button class="btn primary" id="addOperationTop">＋ Nova operação</button><button class="btn" id="logoutBtn">Sair</button><input type="file" id="importFile" accept=".json" class="hidden"></div></header>
   <section class="section active" id="dashboard">
-    <div class="notice"><strong>Acompanhamento:</strong> os preços ainda são editados manualmente. Exporte backups regularmente e confira o status de sincronização antes de sair.</div>
+    <div class="notice"><strong>Cotações:</strong> com a chave da brapi configurada, os preços são consultados quando você abre a carteira (dados podem ter atraso). O preço médio e as operações não são alterados. Exporte backups regularmente.</div>
     <div class="cards" id="metricCards"></div>
     <div class="grid2">
       <div class="panel"><div class="panel-head"><div><h2>Evolução do patrimônio</h2><p class="sub">Registros salvos no histórico</p></div><button class="btn small" id="snapshotBtn">＋ Registrar fechamento</button></div><canvas class="chart" id="historyChart"></canvas><div class="legend"><span><i class="dot" style="background:#225ee8"></i>Patrimônio</span></div></div>
@@ -56,6 +56,7 @@ main{flex:1;min-width:0;padding:26px 30px 40px;max-width:1600px;margin:0 auto;wi
 </main>
 </div>
 <div class="modal-backdrop" id="modalBackdrop"><div class="modal"><h2 id="modalTitle">Novo registro</h2><p class="sub" id="modalSub"></p><form id="modalForm"><div id="modalFields" class="form-grid"></div><div class="modal-actions"><button type="button" class="btn" id="cancelModal">Cancelar</button><button type="submit" class="btn primary">Salvar</button></div></form></div></div>
+<div class="modal-backdrop" id="quoteModal"><div class="modal"><h2>Configurar cotações da brapi</h2><p class="sub">Informe seu token da API. Ele ficará apenas neste navegador, não no GitHub nem no Firestore. Em um site estático, tokens no navegador não são totalmente protegidos; prefira um token limitado e exclusivo para uso pessoal.</p><form id="quoteForm"><div class="field"><label for="quoteToken">Token da brapi</label><input class="input" id="quoteToken" type="password" autocomplete="off" placeholder="Cole seu token de acesso"></div><div class="modal-actions"><button type="button" class="btn danger" id="removeQuoteToken">Remover token</button><button type="button" class="btn" id="cancelQuoteModal">Cancelar</button><button type="submit" class="btn primary">Salvar e atualizar</button></div></form></div></div>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
@@ -73,6 +74,44 @@ const STORAGE_KEY='minhaCarteiraInvestimentos_v1';
 const initial={assets:[],operations:[],dividends:[],history:[]};
 let state={assets:[],operations:[],dividends:[],history:[]},modalMode=null;
 let auth=null,db=null,currentUser=null,unsubscribe=null,documentRef=null,saveQueue=Promise.resolve(),pendingSaves=0,initialized=false;
+const QUOTE_TOKEN_KEY='minhaCarteira_brapi_token_v1';
+let quoteBusy=false,quoteGeneration=0;
+function quoteStatus(msg){document.getElementById('quoteStatus').textContent=msg}
+async function refreshQuotes(automatic=false){
+ if(quoteBusy||!initialized||!currentUser)return;
+ const token=localStorage.getItem(QUOTE_TOKEN_KEY);
+ if(!token){quoteStatus('Configure o token da brapi para atualizar cotações');return}
+ const tickers=[...new Set(state.assets.filter(a=>Number(a.quantity)>0).map(a=>String(a.ticker||'').toUpperCase()).filter(t=>/^[A-Z0-9]{4,12}$/.test(t)))];
+ if(!tickers.length){quoteStatus('Nenhum ativo para atualizar');return}
+ quoteBusy=true;const generation=quoteGeneration;document.getElementById('refreshQuotesBtn').disabled=true;
+ const prices=new Map(),errors=[];
+ try{
+  // Uma consulta por ticker, compatível com o limite do plano gratuito.
+  for(const ticker of tickers){
+   if(generation!==quoteGeneration||!currentUser)break;
+   quoteStatus('Consultando '+ticker+' ('+(prices.size+errors.length+1)+'/'+tickers.length+')…');
+   try{
+    const response=await fetch('https://brapi.dev/api/quote/'+encodeURIComponent(ticker),{headers:{Authorization:'Bearer '+token},cache:'no-store'});
+    if(!response.ok)throw new Error('HTTP '+response.status);
+    const data=await response.json(),item=(data.results||[]).find(x=>String(x.symbol).toUpperCase()===ticker);
+    const price=Number(item?.regularMarketPrice);
+    if(!Number.isFinite(price)||price<=0)throw new Error('sem preço válido');
+    prices.set(ticker,price);
+   }catch(err){errors.push(ticker+' ('+err.message+')')}
+  }
+  if(generation!==quoteGeneration||!currentUser)return;
+  let changes=0;
+  for(const asset of state.assets){const price=prices.get(String(asset.ticker||'').toUpperCase());if(price!==undefined&&Number(asset.quote)!==price){asset.quote=price;changes++}}
+  if(changes)save();else renderAll();
+  const summary=prices.size+'/'+tickers.length+' cotações consultadas'+(changes?' — '+changes+' atualizadas':' — sem alterações');
+  quoteStatus(summary+(errors.length?' | Falhas: '+errors.join(', '):''));
+ }finally{quoteBusy=false;document.getElementById('refreshQuotesBtn').disabled=false}
+}
+document.getElementById('quoteSettingsBtn').onclick=()=>{document.getElementById('quoteToken').value=localStorage.getItem(QUOTE_TOKEN_KEY)||'';document.getElementById('quoteModal').classList.add('show')};
+document.getElementById('cancelQuoteModal').onclick=()=>document.getElementById('quoteModal').classList.remove('show');
+document.getElementById('removeQuoteToken').onclick=()=>{localStorage.removeItem(QUOTE_TOKEN_KEY);document.getElementById('quoteModal').classList.remove('show');quoteStatus('Token removido; cotações manuais')};
+document.getElementById('quoteForm').onsubmit=e=>{e.preventDefault();const token=document.getElementById('quoteToken').value.trim();if(!token)return;localStorage.setItem(QUOTE_TOKEN_KEY,token);document.getElementById('quoteModal').classList.remove('show');refreshQuotes()};
+document.getElementById('refreshQuotesBtn').onclick=()=>refreshQuotes();
 function loadState(){try{const s=JSON.parse(localStorage.getItem(STORAGE_KEY));if(s&&s.assets)return s}catch(e){}return structuredClone(initial)}
 function validData(s){return s&&Array.isArray(s.assets)&&Array.isArray(s.operations)&&Array.isArray(s.dividends)&&Array.isArray(s.history)}
 function status(msg){document.getElementById('syncStatus').textContent=msg;document.getElementById('lastSaved').textContent=msg}
@@ -101,13 +140,14 @@ async function openCloud(user){
    if(!initialized||pendingSaves||snap.metadata.hasPendingWrites||!snap.exists)return;
    const remote=snap.data().data;if(validData(remote)){state=remote;renderAll();status('Sincronizado com a nuvem')}
   },err=>status('Erro de sincronização: '+err.message));
+  if(localStorage.getItem(QUOTE_TOKEN_KEY))refreshQuotes(true);else quoteStatus('Configure o token da brapi para cotações automáticas');
  }catch(err){currentUser=null;initialized=false;showLogin('Não foi possível carregar os dados: '+err.message);await auth.signOut()}
 }
 function setupFirebase(){
  if(Object.values(firebaseConfig).some(v=>!v||v.startsWith('COLE_'))){showLogin('Falta preencher a configuração do Firebase no código.');document.getElementById('authHint').textContent='Consulte as instruções fornecidas com o arquivo.';return}
  if(typeof firebase==='undefined'){showLogin('Não foi possível carregar as bibliotecas do Firebase. Verifique a conexão.');return}
  try{firebase.initializeApp(firebaseConfig);auth=firebase.auth();db=firebase.firestore();auth.onAuthStateChanged(async user=>{
-  if(unsubscribe){unsubscribe();unsubscribe=null}initialized=false;currentUser=null;
+  quoteGeneration++;if(unsubscribe){unsubscribe();unsubscribe=null}initialized=false;currentUser=null;
   if(!user){showLogin();return}await openCloud(user)
  },err=>showLogin(err.message));document.getElementById('authHint').textContent='Use o usuário cadastrado em Authentication.'}
  catch(err){showLogin('Erro na configuração Firebase: '+err.message)}
