@@ -52,7 +52,7 @@ main{flex:1;min-width:0;padding:26px 30px 40px;max-width:1600px;margin:0 auto;wi
   </section>
   <section class="section" id="history">
     <div class="panel"><div class="panel-head"><div><h2>Evolução por ativo</h2><p class="sub">Selecione uma ação, FII ou o saldo total para acompanhar os fechamentos registrados.</p></div><select id="historyAssetSelect" aria-label="Selecionar ativo do gráfico"><option value="TOTAL">Saldo total da carteira</option></select></div><canvas class="chart" id="assetHistoryChart" style="height:270px"></canvas><p class="sub" id="historyChartHint">O gráfico será preenchido com os próximos fechamentos.</p></div>
-    <div class="panel" style="margin-top:16px"><div class="panel-head"><div><h2>Histórico de fechamentos</h2><p class="sub">Tabela diária como sua planilha: cotação por ativo e saldo total. Role horizontalmente no celular.</p></div><button class="btn primary" id="historySnapshotBtn">＋ Registrar fechamento</button></div><div class="table-wrap" id="historyTable"></div></div>
+    <div class="panel" style="margin-top:16px"><div class="panel-head"><div><h2>Histórico de fechamentos</h2><p class="sub">Tabela diária como sua planilha: cotação por ativo e saldo total. Role horizontalmente no celular.</p></div><div class="actions"><button class="btn" id="importHistoryBtn">Importar histórico JSON</button><button class="btn primary" id="historySnapshotBtn">＋ Registrar fechamento</button><input type="file" id="historyImportFile" accept=".json" class="hidden"></div></div><div class="table-wrap" id="historyTable"></div></div>
   </section>
   <p class="footer-note">Ferramenta de organização pessoal. Os cálculos são estimativas de acompanhamento e não substituem informes oficiais da corretora ou apuração fiscal.</p>
 </main>
@@ -275,6 +275,22 @@ const rh=e.target.closest('[data-removehist]');if(rh&&confirm('Excluir este fech
 });
 document.getElementById('exportBtn').onclick=()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='backup-minha-carteira-'+today()+'.json';a.click();URL.revokeObjectURL(url)};
 document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();document.getElementById('importFile').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{const data=JSON.parse(await file.text());if(!validData(data))throw new Error();if(confirm('Importar este arquivo substituirá os dados atuais da sua carteira NA NUVEM, inclusive nos outros dispositivos. Exporte um backup antes. Continuar?')){state=data;save();alert('Importação iniciada. Aguarde a confirmação de sincronização.')}}catch(err){alert('Arquivo inválido ou incompatível. Selecione um backup JSON exportado pelo sistema.')}e.target.value=''};
+document.getElementById('importHistoryBtn').onclick=()=>document.getElementById('historyImportFile').click();
+document.getElementById('historyImportFile').onchange=async e=>{
+ const file=e.target.files[0];if(!file)return;
+ try{
+  const parsed=JSON.parse(await file.text()),entries=parsed.history;
+  if(!Array.isArray(entries)||!entries.length||entries.length>5000||entries.some(h=>!/^\d{4}-\d{2}-\d{2}$/.test(h.date)||!Number.isFinite(h.current)||h.current<0||!h.quotes||typeof h.quotes!=='object'||Object.values(h.quotes).some(v=>!Number.isFinite(v)||v<=0)))throw new Error('Formato do histórico incompatível.');
+  if(!confirm('Mesclar '+entries.length+' fechamentos com o histórico atual? Os investimentos, operações e dividendos serão preservados. Registros existentes na mesma data não serão apagados.'))return;
+  let added=0,merged=0;
+  for(const entry of entries){
+   const previous=state.history.find(h=>h.date===entry.date);
+   if(previous){previous.quotes={...entry.quotes,...(previous.quotes||{})};merged++}
+   else{state.history.push({id:Date.now()+added,date:entry.date,current:entry.current,quotes:entry.quotes,source:'planilha',automatic:false});added++}
+  }
+  save();alert('Histórico mesclado: '+added+' datas novas e '+merged+' datas complementadas. Aguarde a confirmação de sincronização.');
+ }catch(err){alert('Não foi possível importar o histórico: '+err.message)}finally{e.target.value=''}
+};
 setupFirebase();
 </script>
 </body>
