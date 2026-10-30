@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Minha Carteira | Investimentos</title>
+<title>Minha Carteira Pro 2.1 | Investimentos</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2217%22%20fill%3D%22%232d66ed%22%2F%3E%3Ctext%20x%3D%2232%22%20y%3D%2245%22%20font-family%3D%22Arial%2Csans-serif%22%20font-size%3D%2241%22%20font-weight%3D%22800%22%20text-anchor%3D%22middle%22%20fill%3D%22white%22%3EB%3C%2Ftext%3E%3C%2Fsvg%3E">
 <meta name="theme-color" content="#0b1220">
 <meta name="color-scheme" content="dark">
@@ -58,6 +58,14 @@ select option{background:#101c2d;color:var(--ink)}
 .report-print{margin-top:12px}.report-print h3{margin-bottom:8px}.chip-ok{color:var(--green);font-weight:700}.chip-warn{color:#f3c36b;font-weight:700}
 @media(max-width:700px){.calendar-grid{gap:3px}.calendar-day{padding:5px;min-height:70px;font-size:10px}.calendar-day small{font-size:9px}.hero-toolbar{align-items:flex-start}}
 @media print{body{background:#fff!important;color:#111!important} .sidebar,.topbar,.section,.modal-backdrop,.auth-screen,.footer-note{display:none!important}#reports{display:block!important}#reports>.panel:not(:first-child),#reports .toolbar,#reports .sub,#reports h2,#reports #reportStatus{display:none!important}.report-print{display:block!important;color:#111!important}.report-print table th,.report-print table td{color:#111!important;border-color:#ccc!important}.report-print th{background:#eee!important}.app{display:block}.panel{box-shadow:none;border:0}main{padding:0;width:100%;max-width:100%}}
+
+/* Versão 2.1: resumo estratégico na tela de abertura */
+.version-label{display:inline-block;margin-left:8px;padding:3px 8px;background:#183658;border:1px solid #315582;border-radius:20px;color:#98c7ff;font-size:10px;font-weight:800;letter-spacing:.55px}
+.strategy-dashboard{margin:0 0 18px;padding:22px;background:linear-gradient(115deg,#142d4a 0%,#142037 55%,#10241f 100%);border:1px solid #365476}
+.strategy-dashboard h2{font-size:20px}.strategy-dashboard .insight-tile{background:#0e1b2cdd;border-color:#36516a}.strategy-dashboard .insight-tile strong{font-size:23px}
+.strategy-tag{font-size:10px;font-weight:800;letter-spacing:1.2px;color:#65daa8;margin-bottom:6px}
+.strategy-advice{padding:12px 14px;background:#0d2530;border-left:3px solid #60ccaa;border-radius:8px;color:#c9e5e2;font-size:12px}
+@media(max-width:700px){.strategy-dashboard{padding:15px}.strategy-dashboard .panel-head{align-items:flex-start;flex-direction:column}.strategy-dashboard .btn{width:100%}}
 </style>
 </head>
 <body>
@@ -80,10 +88,11 @@ select option{background:#101c2d;color:var(--ink)}
   <div class="side-note">Controle sua carteira de ações e fundos imobiliários em um só lugar.<br><br><span id="lastSaved">Dados salvos neste navegador</span></div>
 </aside>
 <main>
-  <header class="topbar"><div><div class="eyebrow">PAINEL DE INVESTIMENTOS</div><h1 id="pageTitle">Visão geral</h1><span class="sync-bar" id="syncStatus" role="status">Aguardando conexão</span><span class="sync-bar" id="quoteStatus" role="status">Cotações manuais</span></div><div class="actions"><button class="btn" id="exportBtn">Exportar dados</button><button class="btn" id="importBtn">Importar dados</button><button class="btn" id="quoteSettingsBtn">Configurar cotações</button><button class="btn" id="refreshQuotesBtn">Atualizar cotações</button><button class="btn primary" id="addOperationTop">＋ Nova operação</button><button class="btn" id="logoutBtn">Sair</button><input type="file" id="importFile" accept=".json" class="hidden"></div></header>
+  <header class="topbar"><div><div class="eyebrow">MINHA CARTEIRA PRO <span class="version-label">VERSÃO 2.1 • ESTRATÉGIA</span></div><h1 id="pageTitle">Visão geral</h1><span class="sync-bar" id="syncStatus" role="status">Aguardando conexão</span><span class="sync-bar" id="quoteStatus" role="status">Cotações manuais</span></div><div class="actions"><button class="btn" id="exportBtn">Exportar dados</button><button class="btn" id="importBtn">Importar dados</button><button class="btn" id="quoteSettingsBtn">Configurar cotações</button><button class="btn" id="refreshQuotesBtn">Atualizar cotações</button><button class="btn primary" id="addOperationTop">＋ Nova operação</button><button class="btn" id="logoutBtn">Sair</button><input type="file" id="importFile" accept=".json" class="hidden"></div></header>
   <section class="section active" id="dashboard">
     <div class="notice"><strong>Cotações:</strong> com a chave da brapi configurada, os preços são consultados quando você abre a carteira (dados podem ter atraso). O preço médio e as operações não são alterados. Exporte backups regularmente.</div>
     <div class="toolbar hero-toolbar"><label for="dashboardPeriod">Período</label><select id="dashboardPeriod"><option value="all">Todo o histórico</option><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option><option value="365">Últimos 12 meses</option></select><span class="sync-bar">O filtro se aplica ao retorno estimado, não aos saldos atuais</span></div><div class="cards" id="metricCards"></div>
+<div class="panel strategy-dashboard" id="strategyDashboard"><div class="panel-head"><div><div class="strategy-tag">NOVO • VISÃO ESTRATÉGICA</div><h2>Saúde e diversificação da carteira</h2><p class="sub">Análise automática com base nos seus dados sincronizados — sem realizar operações.</p></div><button class="btn primary small" type="button" data-goto="insights">Abrir simulador de aportes →</button></div><div id="dashboardRiskSummary" class="insight-grid"><p class="muted">Aguardando carteira…</p></div><div id="dashboardRiskGuidance"></div></div>
 <div class="grid2"><div class="panel"><h2>Movimentação e desempenho</h2><div id="quickInsights" class="insight-grid"></div></div><div class="panel"><h2>Monitor de preços</h2><div id="dashboardAlerts" class="table-wrap"></div></div></div>
     <div class="grid2">
       <div class="panel"><div class="panel-head"><div><h2>Evolução do patrimônio</h2><p class="sub">Registros salvos no histórico</p></div><button class="btn small" id="snapshotBtn">＋ Registrar fechamento</button></div><canvas class="chart" id="historyChart"></canvas><div class="legend"><span><i class="dot" style="background:#225ee8"></i>Patrimônio</span></div></div>
@@ -357,7 +366,7 @@ function drawAssetChart(){
  for(const s of series){ctx.strokeStyle=s.color;ctx.lineWidth=2.2;ctx.beginPath();s.points.forEach((p,i)=>{const prev=s.points[i-1];if(!prev||p.i!==prev.i+1)ctx.moveTo(x(p.i),y(p.value));else ctx.lineTo(x(p.i),y(p.value))});ctx.stroke();for(const p of s.points){ctx.beginPath();ctx.arc(x(p.i),y(p.value),3.1,0,2*Math.PI);ctx.fillStyle=s.color;ctx.fill()}}
  ctx.fillStyle='#9aabc3';ctx.textAlign='left';ctx.fillText(dateFmt(rows[0].date),pad.l,h-10);ctx.textAlign='right';ctx.fillText(dateFmt(rows[rows.length-1].date),w-pad.r,h-10);
 }
-function renderAll(){renderDashboard();renderPortfolio();renderOperations();renderDividends();renderHistory();renderEnhancements();renderWatchlist();renderRiskInspector()}
+function renderAll(){renderDashboard();renderDashboardStrategy();renderPortfolio();renderOperations();renderDividends();renderHistory();renderEnhancements();renderWatchlist();renderRiskInspector()}
 function drawChart(){const c=document.getElementById('historyChart');if(!c)return;const dpr=window.devicePixelRatio||1,w=c.clientWidth||600,h=210;c.width=w*dpr;c.height=h*dpr;const ctx=c.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);const data=state.history.slice().sort((a,b)=>a.date.localeCompare(b.date));if(data.length<2){ctx.fillStyle='#9aabc3';ctx.font='12px Segoe UI,Arial';ctx.textAlign='center';ctx.fillText(data.length?'Registre mais fechamentos para ver a evolução':'Registre fechamentos para começar a acompanhar a evolução',w/2,h/2);return}const vals=data.map(x=>x.current),min=Math.min(...vals)*.98,max=Math.max(...vals)*1.02,range=max-min||1,pad={l:12,r:12,t:15,b:24};ctx.strokeStyle='#34445a';ctx.lineWidth=1;for(let i=0;i<4;i++){let y=pad.t+(h-pad.t-pad.b)*i/3;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke()}ctx.beginPath();data.forEach((d,i)=>{const x=pad.l+i*(w-pad.l-pad.r)/(data.length-1),y=h-pad.b-(d.current-min)/range*(h-pad.t-pad.b);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.strokeStyle='#225ee8';ctx.lineWidth=2.5;ctx.stroke();data.forEach((d,i)=>{const x=pad.l+i*(w-pad.l-pad.r)/(data.length-1),y=h-pad.b-(d.current-min)/range*(h-pad.t-pad.b);ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fillStyle='#225ee8';ctx.fill()});ctx.fillStyle='#9aabc3';ctx.font='10px Segoe UI,Arial';ctx.textAlign='left';ctx.fillText(dateFmt(data[0].date),pad.l,h-5);ctx.textAlign='right';ctx.fillText(dateFmt(data[data.length-1].date),w-pad.r,h-5)}
 function field(name,label,type='text',opts={}){let input='';if(type==='select')input=`<select name="${name}" ${opts.required===false?'':'required'}>${opts.options.map(o=>`<option value="${esc(o.value)}">${esc(o.label)}</option>`).join('')}</select>`;else input=`<input name="${name}" type="${type}" ${opts.step?`step="${opts.step}"`:''} ${opts.min!==undefined?`min="${opts.min}"`:''} ${opts.required===false?'':'required'} ${opts.value!==undefined?`value="${esc(opts.value)}"`:''} ${opts.placeholder?`placeholder="${esc(opts.placeholder)}"`:''}>`;return `<div class="field"><label>${label}</label>${input}</div>`}
 function openModal(title,sub,fields,mode){modalMode=mode;document.getElementById('modalTitle').textContent=title;document.getElementById('modalSub').textContent=sub;document.getElementById('modalFields').innerHTML=fields;document.getElementById('modalBackdrop').classList.add('show')}
@@ -527,6 +536,20 @@ document.getElementById('refreshWatchlist').addEventListener('click',refreshWatc
 
 
 // Diagnóstico de concentração, sem alterações nas operações ou dados salvos.
+
+function renderDashboardStrategy(){
+ const node=document.getElementById('dashboardRiskSummary'),guide=document.getElementById('dashboardRiskGuidance');
+ if(!node||!guide)return;
+ const assets=totals().h.filter(a=>Number.isFinite(a.current)&&a.current>0).sort((a,b)=>b.current-a.current);
+ const total=assets.reduce((v,a)=>v+a.current,0);
+ if(total<=0){node.innerHTML='<p class="muted">Adicione ativos para gerar o diagnóstico.</p>';guide.textContent='';return;}
+ const leader=assets[0],p=leader.current/total*100,top3=assets.slice(0,3).reduce((v,a)=>v+a.current,0)/total*100;
+ const hhi=assets.reduce((v,a)=>v+(a.current/total)**2,0);
+ const fii=assets.filter(a=>a.type==='FII').reduce((v,a)=>v+a.current,0)/total*100;
+ node.innerHTML=tile('Maior concentração',esc(leader.ticker)+' · '+pct(p),'Percentual do patrimônio em uma posição')+tile('Três maiores posições',pct(top3),'Risco concentrado nos maiores ativos')+tile('Diversificação efetiva',(1/hhi).toFixed(1)+' ativos','Equivalente estatístico dos pesos')+tile('Exposição a FIIs',pct(fii),'Parcela do valor atual');
+ guide.innerHTML='<div class="strategy-advice">'+(p>40?'Atenção: '+esc(leader.ticker)+' responde por '+pct(p)+' da carteira. Explore cenários de novos aportes na aba Inteligência para avaliar a diluição sem vender posições.':'A maior posição representa '+pct(p)+'. Continue acompanhando a concentração por ativo e por setor.')+' Os valores dependem das cotações registradas e não são aconselhamento de investimento.</div>';
+}
+
 function renderRiskInspector(){
  const root=document.getElementById('riskDiagnostics'),select=document.getElementById('riskAsset');if(!root||!select)return;
  const held=totals().h.filter(x=>Number.isFinite(x.current)&&x.current>0).sort((a,b)=>b.current-a.current),sum=held.reduce((n,a)=>n+a.current,0);
