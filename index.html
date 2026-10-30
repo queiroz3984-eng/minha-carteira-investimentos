@@ -71,6 +71,7 @@ select option{background:#101c2d;color:var(--ink)}
     <button data-page="operations"><span class="ico">⇄</span> Compras e vendas</button>
     <button data-page="dividends"><span class="ico">＄</span> Dividendos</button>
     <button data-page="history"><span class="ico">◷</span> Histórico</button>
+<button data-page="watchlist"><span class="ico">◎</span> Radar de mercado</button>
 <button data-page="insights"><span class="ico">◈</span> Inteligência</button>
 <button data-page="income"><span class="ico">▦</span> Proventos + calendário</button>
 <button data-page="alerts"><span class="ico">♢</span> Alertas e metas</button>
@@ -105,6 +106,22 @@ select option{background:#101c2d;color:var(--ink)}
     <div class="panel" style="margin-top:16px"><div class="panel-head"><div><h2>Histórico de fechamentos</h2><p class="sub">Tabela diária como sua planilha: cotação por ativo e saldo total. Role horizontalmente no celular.</p></div><div class="actions"><button class="btn" id="importHistoryBtn">Importar histórico JSON</button><button class="btn primary" id="historySnapshotBtn">＋ Registrar fechamento</button><input type="file" id="historyImportFile" accept=".json" class="hidden"></div></div><div class="table-wrap" id="historyTable"></div></div>
   </section>
 
+
+<section class="section" id="watchlist">
+ <div class="panel"><div class="panel-head"><div><h2>Radar de mercado · Ações em observação</h2><p class="sub">Acompanhe oportunidades sem alterar suas posições, aportes ou rentabilidade.</p></div><button class="btn" id="refreshWatchlist">Atualizar preços B3</button></div>
+ <form id="watchForm" class="form-grid" style="margin-bottom:16px">
+ <div class="field"><label for="watchSymbol">Código da ação</label><input class="input" id="watchSymbol" placeholder="GOOGL ou PETR4" maxlength="20" required></div>
+ <div class="field"><label for="watchExchange">Bolsa</label><select id="watchExchange"><option value="BVMF">B3 (Brasil)</option><option value="NASDAQ">NASDAQ (EUA)</option><option value="NYSE">NYSE (EUA)</option><option value="NYSEARCA">NYSE Arca (ETF)</option></select></div>
+ <div class="field"><label for="watchTarget">Preço-alvo (opcional, moeda da bolsa)</label><input class="input" id="watchTarget" type="number" step="any" min="0" placeholder="Ex.: 125.50"></div>
+ <div class="field"><label for="watchNote">Notas / motivo do interesse</label><input class="input" id="watchNote" maxlength="160" placeholder="Ex.: acompanhar para compra"></div>
+ <div class="field"><label for="watchManual">Cotação manual (opcional)</label><input class="input" id="watchManual" type="number" step="any" min="0" placeholder="Preço verificado"></div>
+ <div class="field"><label>&nbsp;</label><button class="btn primary" type="submit">＋ Adicionar ao radar</button></div>
+ </form>
+ <p class="sync-bar" id="watchStatus">Para ações brasileiras, consulte a brapi usando seu token existente. Para ativos internacionais, abra o Google Finance e informe o preço manualmente. Cotações podem ter atraso.</p>
+ <div class="table-wrap" id="watchTable"></div>
+ </div>
+ <div class="notice" style="margin-top:16px">Google Finance: links para cotações e gráficos oficiais do site. Não existe integração oficial direta de dados da página Google Finance com este HTML. Ativos do radar não são investimentos efetivamente comprados. Preços internacionais manuais não são atualizados automaticamente.</div>
+</section>
 <section class="section" id="insights">
  <div class="panel"><div class="panel-head"><div><h2>Análise da carteira</h2><p class="sub">Compare rentabilidade no período com referências informadas por você. Sem taxas fictícias.</p></div></div>
  <div class="toolbar"><label>Data inicial <input class="input" id="benchmarkStart" type="date"></label><label>Data final <input class="input" id="benchmarkEnd" type="date"></label><button class="btn" id="recalcBench">Calcular</button></div>
@@ -337,7 +354,7 @@ function drawAssetChart(){
  for(const s of series){ctx.strokeStyle=s.color;ctx.lineWidth=2.2;ctx.beginPath();s.points.forEach((p,i)=>{const prev=s.points[i-1];if(!prev||p.i!==prev.i+1)ctx.moveTo(x(p.i),y(p.value));else ctx.lineTo(x(p.i),y(p.value))});ctx.stroke();for(const p of s.points){ctx.beginPath();ctx.arc(x(p.i),y(p.value),3.1,0,2*Math.PI);ctx.fillStyle=s.color;ctx.fill()}}
  ctx.fillStyle='#9aabc3';ctx.textAlign='left';ctx.fillText(dateFmt(rows[0].date),pad.l,h-10);ctx.textAlign='right';ctx.fillText(dateFmt(rows[rows.length-1].date),w-pad.r,h-10);
 }
-function renderAll(){renderDashboard();renderPortfolio();renderOperations();renderDividends();renderHistory();renderEnhancements()}
+function renderAll(){renderDashboard();renderPortfolio();renderOperations();renderDividends();renderHistory();renderEnhancements();renderWatchlist()}
 function drawChart(){const c=document.getElementById('historyChart');if(!c)return;const dpr=window.devicePixelRatio||1,w=c.clientWidth||600,h=210;c.width=w*dpr;c.height=h*dpr;const ctx=c.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);const data=state.history.slice().sort((a,b)=>a.date.localeCompare(b.date));if(data.length<2){ctx.fillStyle='#9aabc3';ctx.font='12px Segoe UI,Arial';ctx.textAlign='center';ctx.fillText(data.length?'Registre mais fechamentos para ver a evolução':'Registre fechamentos para começar a acompanhar a evolução',w/2,h/2);return}const vals=data.map(x=>x.current),min=Math.min(...vals)*.98,max=Math.max(...vals)*1.02,range=max-min||1,pad={l:12,r:12,t:15,b:24};ctx.strokeStyle='#34445a';ctx.lineWidth=1;for(let i=0;i<4;i++){let y=pad.t+(h-pad.t-pad.b)*i/3;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke()}ctx.beginPath();data.forEach((d,i)=>{const x=pad.l+i*(w-pad.l-pad.r)/(data.length-1),y=h-pad.b-(d.current-min)/range*(h-pad.t-pad.b);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.strokeStyle='#225ee8';ctx.lineWidth=2.5;ctx.stroke();data.forEach((d,i)=>{const x=pad.l+i*(w-pad.l-pad.r)/(data.length-1),y=h-pad.b-(d.current-min)/range*(h-pad.t-pad.b);ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fillStyle='#225ee8';ctx.fill()});ctx.fillStyle='#9aabc3';ctx.font='10px Segoe UI,Arial';ctx.textAlign='left';ctx.fillText(dateFmt(data[0].date),pad.l,h-5);ctx.textAlign='right';ctx.fillText(dateFmt(data[data.length-1].date),w-pad.r,h-5)}
 function field(name,label,type='text',opts={}){let input='';if(type==='select')input=`<select name="${name}" ${opts.required===false?'':'required'}>${opts.options.map(o=>`<option value="${esc(o.value)}">${esc(o.label)}</option>`).join('')}</select>`;else input=`<input name="${name}" type="${type}" ${opts.step?`step="${opts.step}"`:''} ${opts.min!==undefined?`min="${opts.min}"`:''} ${opts.required===false?'':'required'} ${opts.value!==undefined?`value="${esc(opts.value)}"`:''} ${opts.placeholder?`placeholder="${esc(opts.placeholder)}"`:''}>`;return `<div class="field"><label>${label}</label>${input}</div>`}
 function openModal(title,sub,fields,mode){modalMode=mode;document.getElementById('modalTitle').textContent=title;document.getElementById('modalSub').textContent=sub;document.getElementById('modalFields').innerHTML=fields;document.getElementById('modalBackdrop').classList.add('show')}
@@ -346,7 +363,7 @@ function openOperation(){openModal('Nova operação','Registre uma compra ou ven
 function openDividend(){openModal('Registrar provento','Informe o valor efetivamente recebido.',field('date','Data de recebimento','date',{value:today()})+field('ticker','Ticker')+field('kind','Tipo','select',{options:[{value:'Dividendo',label:'Dividendo'},{value:'JCP',label:'Juros sobre capital próprio (JCP)'},{value:'Rendimento FII',label:'Rendimento de FII'},{value:'Outro',label:'Outro provento'}]})+field('amount','Valor recebido (R$)','number',{step:'0.01',min:0})+field('note','Observação','text',{required:false,placeholder:'Opcional'}),'dividend')}
 function openAsset(){openModal('Adicionar ativo','Cadastre uma posição inicial. Para maior precisão, registre as compras e vendas em Operações.',field('ticker','Ticker (ex.: PETR4)')+field('type','Tipo de ativo','select',{options:[{value:'Ação',label:'Ação'},{value:'FII',label:'FII'}]})+field('quantity','Quantidade atual','number',{step:'any',min:0})+field('avg','Preço médio (R$)','number',{step:'0.0001',min:0})+field('quote','Cotação atual (R$)','number',{step:'0.0001',min:0}),'asset')}
 function snapshot(){const t=totals(),date=localToday(),existing=state.history.find(h=>h.date===date);if(existing){if(!confirm('Já existe um fechamento para hoje. Atualizar com os valores atuais?'))return;Object.assign(existing,{current:t.current,invested:t.invested,profit:t.profit,quotes:captureQuotes(),automatic:false})}else state.history.push({id:Date.now(),date,current:t.current,invested:t.invested,profit:t.profit,quotes:captureQuotes(),automatic:false});save();go('history')}
-function go(page){document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id===page));document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));const names={dashboard:'Visão geral',portfolio:'Minha carteira',operations:'Compras e vendas',dividends:'Dividendos e rendimentos',history:'Histórico',insights:'Inteligência',income:'Proventos + calendário',alerts:'Alertas e metas',reports:'Relatórios e segurança'};document.getElementById('pageTitle').textContent=names[page]||'Minha carteira';if(page==='history')drawAssetChart();if(page==='insights')renderPerformance();if(page==='income')renderIncome();if(page==='alerts')renderAlerts();if(page==='reports')renderReports()}
+function go(page){document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active',s.id===page));document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));const names={dashboard:'Visão geral',portfolio:'Minha carteira',operations:'Compras e vendas',dividends:'Dividendos e rendimentos',history:'Histórico',watchlist:'Radar de mercado',insights:'Inteligência',income:'Proventos + calendário',alerts:'Alertas e metas',reports:'Relatórios e segurança'};document.getElementById('pageTitle').textContent=names[page]||'Minha carteira';if(page==='history')drawAssetChart();if(page==='watchlist')renderWatchlist();if(page==='insights')renderPerformance();if(page==='income')renderIncome();if(page==='alerts')renderAlerts();if(page==='reports')renderReports()}
 document.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click',()=>go(b.dataset.page)));document.querySelectorAll('[data-goto]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.goto)));
 document.getElementById('addOperationTop').onclick=openOperation;document.getElementById('addOperationBtn').onclick=openOperation;document.getElementById('addAssetBtn').onclick=openAsset;document.getElementById('addDividendBtn').onclick=openDividend;document.getElementById('snapshotBtn').onclick=snapshot;document.getElementById('historySnapshotBtn').onclick=snapshot;document.getElementById('cancelModal').onclick=closeModal;document.getElementById('modalBackdrop').addEventListener('click',e=>{if(e.target.id==='modalBackdrop')closeModal()});
 document.getElementById('assetSearch').addEventListener('input',renderPortfolio);document.getElementById('assetTypeFilter').addEventListener('change',renderPortfolio);document.getElementById('operationFilter').addEventListener('change',renderOperations);
@@ -456,6 +473,54 @@ document.getElementById('validateDataBtn').onclick=renderReports;
 document.getElementById('csvReport').onclick=csvExport;
 document.getElementById('excelReport').onclick=async()=>{const msg=document.getElementById('reportStatus');msg.textContent='Preparando arquivo Excel…';if(typeof XLSX==='undefined'){msg.textContent='Biblioteca Excel indisponível. Use CSV ou verifique sua conexão.';return}try{const book=XLSX.utils.book_new();for(const [name,rows] of Object.entries(excelData()))XLSX.utils.book_append_sheet(book,XLSX.utils.json_to_sheet(rows.length?rows:[{}]),name);XLSX.writeFile(book,'minha-carteira-'+stamp()+'.xlsx');msg.textContent='Excel gerado.'}catch(err){msg.textContent='Erro ao gerar Excel: '+err.message}};
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+
+
+// Radar independente do patrimônio. Compatível com backups antigos, sem mudança no formato obrigatório.
+function getWatchlist(){return Array.isArray(state.watchlist)?state.watchlist:[]}
+function watchCurrency(x){return x.exchange==='BVMF'?'BRL':'USD'}
+function watchMoney(n,x){return n==null||!Number.isFinite(Number(n))?'—':Number(n).toLocaleString('pt-BR',{style:'currency',currency:watchCurrency(x)})}
+function watchURL(x){return 'https://www.google.com/finance/quote/'+encodeURIComponent(x.symbol)+':'+encodeURIComponent(x.exchange)}
+function renderWatchlist(){
+ const target=document.getElementById('watchTable');if(!target)return;
+ const data=getWatchlist();target.innerHTML=data.length?`<table><thead><tr><th>Ativo</th><th>Bolsa</th><th>Cotação</th><th>Preço-alvo</th><th>Monitoramento</th><th>Observações</th><th></th></tr></thead><tbody>${data.map((x,i)=>{
+ const hasPrice=x.price!=null&&Number(x.price)>0,hasTarget=x.target!=null&&Number(x.target)>0;
+ const hit=hasPrice&&hasTarget&&Number(x.price)<=Number(x.target);
+ return `<tr><td class="ticker">${esc(x.symbol)}</td><td>${esc(x.exchange)}</td><td>${watchMoney(hasPrice?x.price:null,x)}<div class="muted" style="font-size:11px">${esc(x.source||'Sem cotação')} ${esc(x.updated||'')}</div></td><td>${watchMoney(hasTarget?x.target:null,x)}</td><td class="${hit?'positive':'muted'}">${hit?'Preço-alvo atingido':hasTarget?'Aguardando preço-alvo':'Sem alvo'}</td><td>${esc(x.note||'—')}</td><td><a class="btn small" href="${watchURL(x)}" target="_blank" rel="noopener noreferrer">Google Finance ↗</a> <button class="btn small" data-watch-edit="${i}">Editar</button> <button class="btn small danger" data-watch-delete="${i}">Excluir</button></td></tr>`}).join('')}</tbody></table>`:'<div class="empty">Seu radar está vazio. Cadastre uma ação que você deseja acompanhar, mesmo sem possuí-la.</div>';
+}
+const exchangeCodes=new Set(['BVMF','NASDAQ','NYSE','NYSEARCA']);
+document.getElementById('watchForm').addEventListener('submit',e=>{
+ e.preventDefault();const symbol=document.getElementById('watchSymbol').value.trim().toUpperCase(),exchange=document.getElementById('watchExchange').value;
+ if(!/^[A-Z0-9.\-]{1,20}$/.test(symbol)||!exchangeCodes.has(exchange))return alert('Código de ativo ou bolsa inválido.');
+ state.watchlist??=[];if(state.watchlist.some(x=>x.symbol===symbol&&x.exchange===exchange))return alert('Esse ativo já está no radar.');
+ const targetInput=document.getElementById('watchTarget').value,manual=document.getElementById('watchManual').value;
+ state.watchlist.push({symbol,exchange,target:targetInput===''?null:Number(targetInput),note:document.getElementById('watchNote').value.trim(),price:manual===''?null:Number(manual),source:manual===''?'Sem cotação':'Manual',updated:manual===''?'':new Date().toLocaleDateString('pt-BR')});
+ save();e.target.reset();renderWatchlist();
+});
+document.getElementById('watchTable').addEventListener('click',e=>{
+ const edit=e.target.closest('[data-watch-edit]'),del=e.target.closest('[data-watch-delete]');
+ if(edit){const x=getWatchlist()[Number(edit.dataset.watchEdit)];if(!x)return;
+ const target=prompt('Preço-alvo para '+x.symbol+' (vazio para remover):',x.target??'');if(target===null)return;
+ const price=prompt('Cotação manual de '+x.symbol+' (vazio para manter a atual):','');if(price===null)return;
+ const note=prompt('Anotações:',x.note||'');if(note===null)return;
+ const parse=v=>Number(String(v).replace(',','.'));if((target.trim()&&!Number.isFinite(parse(target)))||(price.trim()&&!Number.isFinite(parse(price))))return alert('Digite números válidos.');
+ x.target=target.trim()?parse(target):null;if(price.trim()){x.price=parse(price);x.source='Manual';x.updated=new Date().toLocaleDateString('pt-BR')}x.note=note.slice(0,160);save();renderWatchlist();
+ }else if(del&&confirm('Remover este ativo do radar? Sua carteira de investimentos não será alterada.')){state.watchlist.splice(Number(del.dataset.watchDelete),1);save();renderWatchlist()}
+});
+let watchRefreshing=false;
+async function refreshWatchlist(){
+ if(watchRefreshing||!initialized||!currentUser)return;
+ const token=localStorage.getItem(QUOTE_TOKEN_KEY),items=getWatchlist().filter(x=>x.exchange==='BVMF');
+ const statusEl=document.getElementById('watchStatus');if(!items.length){statusEl.textContent='Nenhum ativo B3 no radar. Os internacionais são acompanhados por links e preços manuais.';return}
+ if(!token){statusEl.textContent='Configure seu token da brapi em “Configurar cotações” para atualizar ativos da B3.';return}
+ watchRefreshing=true;let updated=0,errors=[];document.getElementById('refreshWatchlist').disabled=true;
+ try{for(const x of items){if(!currentUser)break;statusEl.textContent='Consultando '+x.symbol+'…';try{
+  const response=await fetch('https://brapi.dev/api/quote/'+encodeURIComponent(x.symbol),{headers:{Authorization:'Bearer '+token},cache:'no-store'});
+  if(!response.ok)throw Error('HTTP '+response.status);const data=await response.json();const match=(data.results||[]).find(v=>String(v.symbol).toUpperCase()===x.symbol);const val=Number(match?.regularMarketPrice);
+  if(!Number.isFinite(val)||val<=0)throw Error('cotação indisponível');x.price=val;x.source='brapi';x.updated=new Date().toLocaleString('pt-BR');updated++;
+ }catch(err){errors.push(x.symbol+': '+err.message)}}if(updated)save();else renderWatchlist();statusEl.textContent=updated+' cotações B3 atualizadas.'+(errors.length?' Não atualizadas: '+errors.join('; '):'')+'. Google Finance disponível nos links de cada ativo.';
+ }finally{watchRefreshing=false;document.getElementById('refreshWatchlist').disabled=false}
+}
+document.getElementById('refreshWatchlist').addEventListener('click',refreshWatchlist);
 
 setupFirebase();
 </script>
