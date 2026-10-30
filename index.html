@@ -125,7 +125,10 @@ select option{background:#101c2d;color:var(--ink)}
 <section class="section" id="insights">
  <div class="panel"><div class="panel-head"><div><h2>Análise da carteira</h2><p class="sub">Compare rentabilidade no período com referências informadas por você. Sem taxas fictícias.</p></div></div>
  <div class="toolbar"><label>Data inicial <input class="input" id="benchmarkStart" type="date"></label><label>Data final <input class="input" id="benchmarkEnd" type="date"></label><button class="btn" id="recalcBench">Calcular</button></div>
- <div id="performanceSummary" class="insight-grid"></div><div class="notice">A rentabilidade por fluxo de caixa considera aportes e retiradas quando as operações disponíveis permitem. Carteiras criadas com saldo inicial manual e vendas sem custo histórico completo podem apresentar resultado estimado. CDI e Ibovespa são referências opcionais informadas para o MESMO período; o sistema não inventa esses dados.</div>
+ <div id="performanceSummary" class="insight-grid"></div>
+ <div class="panel" style="margin:16px 0;background:#101b2d"><div class="panel-head"><div><h2>Concentração e diversificação</h2><p class="sub">Diagnóstico calculado com as posições e preços atualmente carregados. Não é recomendação de compra ou venda.</p></div></div><div id="riskDiagnostics"></div></div>
+ <div class="panel" style="margin:16px 0;background:#101b2d"><div class="panel-head"><div><h2>Simulador de aporte e diversificação</h2><p class="sub">Simule o efeito de novos aportes na carteira sem realizar nem salvar uma compra.</p></div></div>
+ <div class="toolbar"><label>Ativo existente <select id="riskAsset"></select></label><label>Valor do aporte (R$) <input class="input" type="number" id="riskContribution" min="0" step="0.01" value="1000"></label><label>Preço por unidade (R$) <input class="input" type="number" id="riskPrice" min="0.0001" step="any"></label></div><div id="riskSimulation"></div></div><div class="notice">A rentabilidade por fluxo de caixa considera aportes e retiradas quando as operações disponíveis permitem. Carteiras criadas com saldo inicial manual e vendas sem custo histórico completo podem apresentar resultado estimado. CDI e Ibovespa são referências opcionais informadas para o MESMO período; o sistema não inventa esses dados.</div>
  <div class="form-grid"><label class="field">CDI acumulado no período (%)<input class="input" id="cdiValue" type="number" step="0.0001" placeholder="Valor verificado"></label><label class="field">Ibovespa acumulado no período (%)<input class="input" id="ibovValue" type="number" step="0.0001" placeholder="Valor verificado"></label><div class="field"><label>Referências</label><button class="btn primary" id="saveBench">Salvar referências</button></div></div>
  <div class="panel" style="margin-top:18px"><h2>Rentabilidade e benchmark</h2><canvas class="chart" id="benchmarkChart" style="height:260px"></canvas></div>
  </div>
@@ -354,7 +357,7 @@ function drawAssetChart(){
  for(const s of series){ctx.strokeStyle=s.color;ctx.lineWidth=2.2;ctx.beginPath();s.points.forEach((p,i)=>{const prev=s.points[i-1];if(!prev||p.i!==prev.i+1)ctx.moveTo(x(p.i),y(p.value));else ctx.lineTo(x(p.i),y(p.value))});ctx.stroke();for(const p of s.points){ctx.beginPath();ctx.arc(x(p.i),y(p.value),3.1,0,2*Math.PI);ctx.fillStyle=s.color;ctx.fill()}}
  ctx.fillStyle='#9aabc3';ctx.textAlign='left';ctx.fillText(dateFmt(rows[0].date),pad.l,h-10);ctx.textAlign='right';ctx.fillText(dateFmt(rows[rows.length-1].date),w-pad.r,h-10);
 }
-function renderAll(){renderDashboard();renderPortfolio();renderOperations();renderDividends();renderHistory();renderEnhancements();renderWatchlist()}
+function renderAll(){renderDashboard();renderPortfolio();renderOperations();renderDividends();renderHistory();renderEnhancements();renderWatchlist();renderRiskInspector()}
 function drawChart(){const c=document.getElementById('historyChart');if(!c)return;const dpr=window.devicePixelRatio||1,w=c.clientWidth||600,h=210;c.width=w*dpr;c.height=h*dpr;const ctx=c.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);const data=state.history.slice().sort((a,b)=>a.date.localeCompare(b.date));if(data.length<2){ctx.fillStyle='#9aabc3';ctx.font='12px Segoe UI,Arial';ctx.textAlign='center';ctx.fillText(data.length?'Registre mais fechamentos para ver a evolução':'Registre fechamentos para começar a acompanhar a evolução',w/2,h/2);return}const vals=data.map(x=>x.current),min=Math.min(...vals)*.98,max=Math.max(...vals)*1.02,range=max-min||1,pad={l:12,r:12,t:15,b:24};ctx.strokeStyle='#34445a';ctx.lineWidth=1;for(let i=0;i<4;i++){let y=pad.t+(h-pad.t-pad.b)*i/3;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke()}ctx.beginPath();data.forEach((d,i)=>{const x=pad.l+i*(w-pad.l-pad.r)/(data.length-1),y=h-pad.b-(d.current-min)/range*(h-pad.t-pad.b);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.strokeStyle='#225ee8';ctx.lineWidth=2.5;ctx.stroke();data.forEach((d,i)=>{const x=pad.l+i*(w-pad.l-pad.r)/(data.length-1),y=h-pad.b-(d.current-min)/range*(h-pad.t-pad.b);ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fillStyle='#225ee8';ctx.fill()});ctx.fillStyle='#9aabc3';ctx.font='10px Segoe UI,Arial';ctx.textAlign='left';ctx.fillText(dateFmt(data[0].date),pad.l,h-5);ctx.textAlign='right';ctx.fillText(dateFmt(data[data.length-1].date),w-pad.r,h-5)}
 function field(name,label,type='text',opts={}){let input='';if(type==='select')input=`<select name="${name}" ${opts.required===false?'':'required'}>${opts.options.map(o=>`<option value="${esc(o.value)}">${esc(o.label)}</option>`).join('')}</select>`;else input=`<input name="${name}" type="${type}" ${opts.step?`step="${opts.step}"`:''} ${opts.min!==undefined?`min="${opts.min}"`:''} ${opts.required===false?'':'required'} ${opts.value!==undefined?`value="${esc(opts.value)}"`:''} ${opts.placeholder?`placeholder="${esc(opts.placeholder)}"`:''}>`;return `<div class="field"><label>${label}</label>${input}</div>`}
 function openModal(title,sub,fields,mode){modalMode=mode;document.getElementById('modalTitle').textContent=title;document.getElementById('modalSub').textContent=sub;document.getElementById('modalFields').innerHTML=fields;document.getElementById('modalBackdrop').classList.add('show')}
@@ -521,6 +524,33 @@ async function refreshWatchlist(){
  }finally{watchRefreshing=false;document.getElementById('refreshWatchlist').disabled=false}
 }
 document.getElementById('refreshWatchlist').addEventListener('click',refreshWatchlist);
+
+
+// Diagnóstico de concentração, sem alterações nas operações ou dados salvos.
+function renderRiskInspector(){
+ const root=document.getElementById('riskDiagnostics'),select=document.getElementById('riskAsset');if(!root||!select)return;
+ const held=totals().h.filter(x=>Number.isFinite(x.current)&&x.current>0).sort((a,b)=>b.current-a.current),sum=held.reduce((n,a)=>n+a.current,0);
+ if(!sum){root.innerHTML='<p class="muted">Cadastre posições com cotações válidas para analisar a concentração.</p>';select.innerHTML='';document.getElementById('riskSimulation').innerHTML='';return}
+ const biggest=held[0],top3=held.slice(0,3).reduce((n,a)=>n+a.current,0)/sum*100,hhi=held.reduce((n,a)=>n+Math.pow(a.current/sum,2),0),effective=1/hhi;
+ const fii=held.filter(a=>a.type==='FII').reduce((n,a)=>n+a.current,0)/sum*100;
+ const concentration=biggest.current/sum*100;
+ root.innerHTML='<div class="insight-grid">'+tile('Maior posição',biggest.ticker+' · '+pct(concentration),'Percentual do patrimônio em um único ativo')+tile('Três maiores ativos',pct(top3),'Concentração conjunta')+tile('Diversificação efetiva',effective.toFixed(2)+' ativos','Indicador 1 / soma dos pesos ao quadrado')+tile('Participação de FIIs',pct(fii),'Classificação dos ativos no cadastro')+'</div>'+ (concentration>40?'<div class="notice">Atenção: uma posição representa mais de 40% do patrimônio. Considere avaliar limites pessoais de concentração, risco setorial e horizonte de investimento.</div>':'<p class="muted">Acompanhe a evolução das maiores posições e a diversificação ao longo do tempo.</p>')+
+ '<div class="table-wrap"><table><thead><tr><th>Ativo</th><th class="num">Valor atual</th><th class="num">Peso na carteira</th><th class="num">Impacto se cair 10%</th></tr></thead><tbody>'+held.map(a=>'<tr><td class="ticker">'+esc(a.ticker)+'</td><td class="num">'+brl(a.current)+'</td><td class="num">'+pct(a.current/sum*100)+'</td><td class="num negative">'+pct(a.current/sum*10)+' da carteira</td></tr>').join('')+'</tbody></table></div>';
+ const selected=select.value;select.innerHTML=held.map(a=>'<option value="'+esc(a.ticker)+'">'+esc(a.ticker)+'</option>').join('');if(held.some(a=>a.ticker===selected))select.value=selected;
+ if(!select.dataset.riskBound){select.dataset.riskBound='1';select.addEventListener('change',()=>{const item=totals().h.find(a=>a.ticker===select.value);document.getElementById('riskPrice').value=item?.quote||'';drawRiskSimulation()});document.getElementById('riskContribution').addEventListener('input',drawRiskSimulation);document.getElementById('riskPrice').addEventListener('input',drawRiskSimulation)}
+ if(document.activeElement!==document.getElementById('riskPrice')){const item=held.find(a=>a.ticker===select.value);document.getElementById('riskPrice').value=item?.quote||''}
+ drawRiskSimulation();
+}
+function drawRiskSimulation(){
+ const target=document.getElementById('riskSimulation'),ticker=document.getElementById('riskAsset')?.value;if(!target)return;
+ const items=totals().h,asset=items.find(a=>a.ticker===ticker),sum=items.reduce((s,a)=>s+a.current,0);
+ const amount=Number(document.getElementById('riskContribution')?.value),price=Number(document.getElementById('riskPrice')?.value);
+ if(!asset||!Number.isFinite(price)||price<=0||!Number.isFinite(amount)||amount<0){target.innerHTML='<p class="muted">Informe um aporte e preço válido para simular.</p>';return}
+ const quantity=Math.floor(amount/price),spent=quantity*price,leftover=amount-spent,denom=sum+spent;
+ const oldPct=sum?asset.current/sum*100:0,newPct=denom?(asset.current+spent)/denom*100:0;
+ const biggestBefore=items.reduce((m,a)=>Math.max(m,a.current),0)/sum*100,biggestAfter=items.reduce((m,a)=>Math.max(m,a.current+(a.ticker===ticker?spent:0)),0)/denom*100;
+ target.innerHTML='<div class="insight-grid">'+tile('Quantidade simulada',String(quantity),esc(ticker)) +tile('Investimento simulado',brl(spent),'Saldo não utilizado: '+brl(leftover))+tile('Peso atual de '+ticker,pct(oldPct))+tile('Peso após a simulação',pct(newPct)) +tile('Maior concentração (antes)',pct(biggestBefore))+tile('Maior concentração (depois)',pct(biggestAfter))+'</div><p class="muted">Simulação baseada no preço digitado, sem custos, variação de mercado ou gravação no Firebase. Não representa uma ordem de compra.</p>';
+}
 
 setupFirebase();
 </script>
